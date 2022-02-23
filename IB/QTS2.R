@@ -1,0 +1,103 @@
+# https://www.r-bloggers.com/quantitative-trading-strategies-using-quantmod/
+
+install.packages("quantstrat")
+
+library(dplyr)
+library(quantmod)
+library(tidyquant)
+library(TTR)
+library(timetk)
+library(tidyr)
+library(ggplot2) 
+library(directlabels)
+library(data.table)
+library(quantstrat)
+library(purrr)
+library(kableExtra)
+
+install.packages("devtools")
+require(devtools)
+install_github("braverock/blotter") # dependency
+install_github("braverock/quantstrat")
+
+
+
+start_date <- "2018-01-01"
+end_date <- "2020-08-21"
+symbols <- c("AAPL", "AMD", "ADI",  "ABBV", "A",  "APD", "AA", "CF", "NVDA", "HOG", "WMT", "AMZN"
+             #,"MSFT", "F", "INTC", "ADBE", "AMG", "AKAM", "ALB", "ALK"
+)
+
+getSymbols(symbols, from = start_date, to = end_date)
+
+chartSeries(NVDA,theme = chartTheme("white"),TA = c(addBBands(n = 20, sd = 2, ma = "SMA", draw = 'bands', on = -1))) 
+chartSeries(AMZN,theme = chartTheme("white"),TA = c(addBBands(n = 20, sd = 2, ma = "SMA", draw = 'bands', on = -1))) 
+
+rm.strat("BollingerBandsStrat")
+currency('USD')
+
+stock(symbols, currency = 'USD', multiplier = 1)
+
+
+init_date = as.Date(start_date) - 1
+init_equity = 1000
+portfolio.st <- account.st <- 'BollingerBandsStrat'
+
+
+initPortf(portfolio.st, symbols = symbols, initDate = init_date)
+initAcct(account.st, portfolios = 'BollingerBandsStrat', initDate = init_date)
+initOrders(portfolio = portfolio.st, initDate = init_date)
+
+BBands_Strategy <- strategy("BollingerBandsStrat")
+
+#### Adding indicators:
+
+# Add indicators
+BBands_Strategy <- add.indicator(strategy = BBands_Strategy, name = "BBands",arguments = list(HLC = quote(HLC(mktdata)),maType = 'SMA'),label = 'BollingerBands_Label')
+
+# Adding signals:
+
+BBands_Strategy <- add.signal(BBands_Strategy, name = "sigCrossover", arguments = list(columns = c("Close","up"), relationship = "gt"), label = "Close.gt.UpperBBand")
+BBands_Strategy <- add.signal(BBands_Strategy, name = "sigCrossover", arguments = list(columns = c("Close","dn"), relationship = "lt"), label = "Close.lt.LowerBBand")
+BBands_Strategy <- add.signal(BBands_Strategy, name = "sigCrossover", arguments = list(columns = c("High","Low","mavg"), relationship = "op"), label = "Cross.MiddleBBand")
+
+# Add rules
+
+BBands_Strategy <- add.rule(BBands_Strategy, name = 'ruleSignal', arguments = list(sigcol = "Close.gt.UpperBBand", sigval = TRUE, orderqty = -100, ordertype = 'market',orderside = NULL, threshold = NULL), type = 'enter')
+BBands_Strategy <- add.rule(BBands_Strategy, name = 'ruleSignal', arguments = list(sigcol = "Close.lt.LowerBBand", sigval = TRUE, orderqty = 100, ordertype = 'market', orderside = NULL, threshold = NULL), type = 'enter')
+BBands_Strategy <- add.rule(BBands_Strategy, name = 'ruleSignal', arguments = list(sigcol = "Cross.MiddleBBand", sigval = TRUE, orderqty = 'all', ordertype = 'market', orderside = NULL, threshold = NULL), type = 'exit')
+
+
+# Apply the strategy and update the portfolio
+
+out <- applyStrategy(strategy = BBands_Strategy, portfolios = 'BollingerBandsStrat', parameters = list( 
+    sd = 1.6, # number of standard deviations
+    n = 20) # MA periods
+)
+
+updatePortf(Portfolio = 'BollingerBandsStrat', Dates = paste('::',as.Date(Sys.time()),sep=''))
+
+tradeStats(portfolio.st) %>% tibble::rownames_to_column("ticker") %>% t() %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+
+for(sym in symbols){
+  chart.Posn(Portfolio = 'BollingerBandsStrat', Symbol = sym)
+  plot(add_BBands(on = 1, sd = 1.6, n = 20))
+  
+  perf <- tradeStats(portfolio.st) %>% 
+    tibble::rownames_to_column("ticker") %>% 
+    filter(ticker == sym) %>% 
+    t() %>% 
+    kable() %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+}
+
+
+
+### ADX: Directional Movement Index
+
+
+
+
+
+

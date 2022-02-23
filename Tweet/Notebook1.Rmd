@@ -1,0 +1,77 @@
+---
+title: "R Notebook"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+```{r}
+library(rmarkdown)
+```
+
+
+# Trends
+ 
+## GlobalTrends
+```{r}
+globaltrends <- trends_available()
+globaltrends
+```
+## USTrends
+```{r}
+ustrends <- get_trends("united states")
+ustrends
+```
+
+# Tweet Over Time
+```{r}
+tweetdata <- search_tweets(q = "@FinishLine", n = 10000, lang = "en", include_rts = F)
+users_data(tweetdata)
+ts_plot(tweetdata, by = "hours")
+ts_plot(tweetdata, by = "days")
+```
+# Word Cloud
+
+```{r}
+tidy_descr <- tweetdata %>% unnest_tokens(word, text) %>% mutate(word_stem = wordStem(word)) %>% anti_join(stop_words, by = "word") %>% filter(!grepl("\\.|http", word))
+tidy_descr %>% count(word_stem) %>% mutate(word_stem = removeNumbers(word_stem)) %>% with(wordcloud(word_stem, n, max.words = 100, colors = palette_light()))
+```
+
+
+# Sentiment Analysis
+
+```{r}
+result <- get_nrc_sentiment(as.character(tweetdata$text))
+result1<-data.frame(t(result))
+new_result <- data.frame(rowSums(result1))
+names(new_result)[1] <- "count"
+new_result <- cbind("sentiment" = rownames(new_result), new_result)
+rownames(new_result) <- NULL
+qplot(sentiment, data=new_result[1:8,], weight=count, geom="bar",fill=sentiment)+ggtitle("finishline Sentiments")
+qplot(sentiment, data=new_result[9:10,], weight=count, geom="bar",fill=sentiment)+ggtitle("finishline Sentiments")
+```
+# Tag along with @FinishLine
+```{r}
+rstats <- search_tweets("@FinishLine", n=10000) 
+glimpse(rstats)
+select(rstats,hashtags) %>% unnest(cols = c(hashtags)) %>% mutate(hashtags = tolower(hashtags)) %>% count(hashtags, sort=TRUE) %>% filter(hashtags != "rstats") %>% top_n(20)
+```
+
+# Top n Followers
+```{r}
+rt <- search_tweets("#FinishLine", n = 10000, include_rts = FALSE)
+rt %>% select(tweeted = created_at, screen_name, followers = followers_count) %>% head(20) %>% kable() %>% column_spec(1:3, width = c("45%", "35%", "20%")) %>% kable_styling()
+```
+
+
+
+
